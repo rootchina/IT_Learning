@@ -1,0 +1,136 @@
+
+                                        利用find和sed批量替换文件内容
+这是这个连锁反应：发现apache的log没有分日期、分正误记录 --> 改为分日期、分正误记录log --> 观察错误log，发现有大量404错误 --> 需要修正程序，发现文件路径错误 --> 本机使用Dreamweaver替换路径，提交SVN --> 部署到服务器上时发现文件太多、且分散在子目录中
+
+     怎么办？一个一个找一个一个上传？傻子才干！既然是在FreeBSD下，那就是用强大的命令行工具吧！实践中发现这个方法真的很实用，记录下来！
+
+     需求：把本目录下，包括子目录下的文件，把所有含有“/adm/images/c.gif”的地方替换为“/Admin/Images/c.gif”。
+
+     步骤：找出文件，找到地方，替换。
+
+     寻找命令：找到文件（find，ls），找到地方（grep），替换（sed）。
+
+     现在需要做的，就是组合起来。
+
+     查找资料，有前辈告诫：“find 命令是所有 Linux 命令中最有用的一个，同时也是最混乱的一个”，顿时奔溃。
+
+     还好，发现find命令有个叫“-exec”的，很是强大：find命令对匹配的文件执行该参数所给出的shell命令。相应命令的形式为'command' {} \;，注意{}和\;之间的空格。
+
+     个人理解：-exec参数中的“{}”是该参数前命令产生的结果的一个变量。感觉类似管道的作用了。
+
+     而且还可以有多个-exec参数，很是强大。基本上grep和sed都可以作为子命令在其中运行了。
+
+     如此一来，可以使用以下命令列出需要替换的字符串所在的行了：
+
+     
+
+
+    以下是代码片段：
+
+    find ./ -exec grep "/adm/images/c.gif" '{}' \;
+ 
+
+
+     然后再使用一个-exec参数吧sed包含进来吧。
+
+     sed 的工作方式：
+
+     
+
+
+    以下是引用片段：
+
+    sed 实用工具按顺序逐行将文件读入到内存中。然后，它执行为该行指定的所有操作，并在完成请求的修改之后将该行放回到内存中，以将其转储至终端。完成了这一行上的所有操作之后，它读取文件的下一行，然后重复该过程直到它完成该文件。默认输出是将每一行的内容输出到屏幕上。在这里，开始涉及到两个重要的因素―首先，输出可以被重定向到另一文件中，以保存变化；第二，源文件（默认地）保持不被修改。sed 默认读取整个文件并对其中的每一行进行修改。不过，可以按需要将操作限制在指定的行上。
+ 
+
+
+     注意后面提到的源文件不会修改，不过sed提供了-i参数，可以做到控制是否可以修改源文件。-i参数的描述，Linux和FreeBSD下不太一样，后来也发现Linux在命令的使用方便上的确是要强于FreeBSD的。分述如下：
+
+     
+
+
+    以下是引用片段：
+
+    FreeBSD 4.7-STABLE下：
+     -i extension
+             Edit files in-place, saving backups with the specified extension.
+             If a zero-length extension is given, no backup will be saved.  It
+             is not recommended to give a zero-length extension when in-place
+             editing files, as you risk corruption or partial content in situ-
+             ations where disk space is exhausted, etc.
+
+    Linux下：
+       -i[SUFFIX], --in-place[=SUFFIX]
+              edit files in place (makes backup if extension supplied)
+ 
+
+
+     FreeBSD下说如果-i参数后面的后缀如果为0，则不产生备份文件，结果我试了好几次都没有搞定，不得已，使用了一个备份文件来存储源文件，然后修改源文件：
+
+     
+
+以下是代码片段：
+find ./ -exec grep "/adm/images/c.gif" '{}' \; -exec sed -i .bak 's/\/adm\/images\/c.gif/\/Admin\/Images\/c.gif/g' {} \; 
+
+
+     比如下面的就不行，老提示错误，望知情者指教：
+
+
+以下是代码片段：
+find ./ -exec grep "/adm/images/c.gif" '{}' \; -exec sed -i 's/\/adm\/images\/c.gif/\/Admin\/Images\/c.gif/g' {} \; 
+
+
+     Linux下，可以不产生备份文件直接修改了：
+
+
+以下是代码片段：
+find ./ -exec grep "/adm/images/c.gif" '{}' \; -exec sed -i 's/\/adm\/images\/c.gif/\/Admin\/Images\/c.gif/g' {} \; 
+
+
+     当然，需要强调的是：备份还是很重要的！切记切记！
+
+     本文环境如下：
+
+     
+
+以下是引用片段：
+FreeBSD：
+FreeBSD 4.7-STABLE 
+    Linux：
+[root@bsso Admin_bak]# cat /etc/issue
+CentOS release 4.1 (Final)
+Kernel \\r on an \\m
+[root@bsso Admin_bak]# sed --version
+GNU sed version 4.1.2
+Copyright (C) 2003 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE,
+to the extent permitted by law.
+ 
+
+
+     另：
+    1：FreeBSD下如何查看sed的版本呢？
+    2：网上看见资料说，类似下面的语句应该是可以达到目的，当我在FreeBSD和Linux下都没有运行成功
+
+
+以下是代码片段：
+sed -i 's/\/adm\/images\/c.gif/\/Admin\/Images\/c.gif/g' `grep -rf "/adm/images/c.gif"` 
+
+
+    
+    参考资料：
+
+     
+
+以下是引用片段：
+
+Linux文件查找命令find,xargs详述
+http://www.linuxsir.org/main/?q=node/137
+Linux Find 命令精通指南
+http://www.oracle.com/technology/global/cn/pub/articles/calish-find.html
+使用 sed 编辑器
+http://www.oracle.com/technology/global/cn/pub/articles/dulaney_sed.html
+linux sed 批量替换多个文件中的字符串
+http://www.admin99.net/read.php/108.htm
+ 
